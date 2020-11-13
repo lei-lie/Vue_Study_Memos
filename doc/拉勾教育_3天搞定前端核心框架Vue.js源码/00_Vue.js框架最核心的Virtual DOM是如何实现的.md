@@ -60,7 +60,21 @@ console.log(s);
 
 
 
+#### 虚拟DOM的作用
 
+- 维护视图和状态的关系
+- （只有）在复杂视图的情况下（才会）提升性能
+- 除了渲染DOM以外，还可以实现服务端渲染如SSR（Nuxt.js/Next.js），或可以通过特殊手段把虚拟DOM转化成原生应用（Weex/React Native）以及小程序（mpvue/uni-app）等
+
+#### Virtual DOM开源库
+
+- Snabbdom
+  - Vue2.x内部使用的Virtual DOM就是改造的Snabbdom
+  - 大约2000SLOC（single line of code）
+  - 通过模块可扩展
+  - 源码使用TypeScript（基于TypeScript开发的）
+  - 最快的Virtual DOM之一
+- virtual-dom
 
 ## 参考
 
