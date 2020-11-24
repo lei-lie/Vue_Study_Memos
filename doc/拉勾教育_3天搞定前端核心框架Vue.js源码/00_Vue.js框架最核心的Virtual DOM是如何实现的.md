@@ -330,7 +330,216 @@ function clickHandler(e) {
 }
 ```
 
+#### 总结
 
+`snabbdom`核心
+
+1.调用`init`函数返回`patch`函数
+
+2.通过`h`函数创建虚拟节点
+
+3.通过`patch`函数比较两个虚拟节点，计算差异，并将差异更新到真实`DOM`上
+
+## snabbdom源码解析
+
+### 如何学习源码
+
+1. 先宏观了解，即是对一个库做整体的了解，即是了解一个库的核心执行过程
+
+2. 然后带着目标看源码
+3. 看源码过程要求不求甚解，即是看源码的过程要围绕核心目标，先把主线逻辑走通，涉及分支的部分先不看
+4. 调试，主线逻辑走通之后，还可以写一个小的demo，对代码进行调试，加深理解
+5. 参考别人写文章
+
+### snabbdom的核心执行流程
+
+1. 使用`h()`创建`JavaScript`对象（`Vnode`）来，描述真实`DOM`
+
+2. 通过`init()`注册模块，返回`patch()`
+
+3. 通过`patch()`比较两个`Vnode`
+
+4. 把变化的内容更新到真实`DOM`上
+
+
+
+### snabbdom源码结构
+
+源码位置：https://github.com/snabbdom/snabbdom
+
+#### src目录结构
+
+```javascript
+h.ts # h(),用来创建vnode
+hooks.ts # 所有钩子函数的定义
+htmldomapi.te # dom api 的封装
+init.ts # init函数
+is.ts # 定义是否是数组，字符串或数字
+jsx-global.ts # jsx相关
+jsx.ts # jsx相关
+thunk.ts # thunk函数
+tovnode.ts # 转化为Vnode
+vnode.ts # Vnode定义
+helpers # 
+	attachto.ts # 定义类型，Vnode.ts中使用
+modules # 模块
+	attributes.ts # 属性模块
+	class.ts # 类样式模块
+	dataset.ts # dataset模块
+	eventlistener.ts # 绑定，删除事件模块
+	hero.ts # 
+	module.ts # 模块中要使用的钩子函数
+	props.ts # 属性
+	style.ts # 行内样式模块
+
+```
+
+
+
+#### h函数
+
+###### h()介绍
+
+在日常使用`Vue`来开发项目时，见过`h()`
+
+```javascript
+new Vue({
+router,
+store,
+render: h => h(App)
+}).$mount('#app')
+```
+
+`h()`最早见于`hyperscript`，使用`JavaScript`创建的超文本
+
+`snabbdom`中的`h()`不是用来创建超文本，而是用于创建`vnode`
+
+函数的重载
+
+概念
+
+参数个数或类型不同的函数
+
+JavaScript中没有重载的概念
+
+typescript中有重载，不过重载的实现还是通过代码调整参数
+
+```javascript
+import { vnode, VNode, VNodeData } from "./vnode";
+import * as is from "./is";
+
+export type VNodes = VNode[];
+export type VNodeChildElement = VNode | string | number | undefined | null;
+export type ArrayOrElement<T> = T | T[];
+export type VNodeChildren = ArrayOrElement<VNodeChildElement>;
+
+function addNS(
+  data: any,
+  children: VNodes | undefined,
+  sel: string | undefined
+): void {
+  data.ns = "http://www.w3.org/2000/svg";
+  if (sel !== "foreignObject" && children !== undefined) {
+    for (let i = 0; i < children.length; ++i) {
+      const childData = children[i].data;
+      if (childData !== undefined) {
+        addNS(
+          childData,
+          (children[i] as VNode).children as VNodes,
+          children[i].sel
+        );
+      }
+    }
+  }
+}
+/* h函数的重载  都返回vnode*/
+// 一个参数：元素
+export function h(sel: string): VNode;
+// 两个参数：第一个参数元素，第二个参数：
+export function h(sel: string, data: VNodeData | null): VNode;
+// 两个参数
+export function h(sel: string, children: VNodeChildren): VNode;
+// 三个参数
+export function h(
+  sel: string,
+  data: VNodeData | null,
+  children: VNodeChildren
+): VNode;
+// 三个参数
+export function h(sel: any, b?: any, c?: any): VNode {
+  var data: VNodeData = {};
+  var children: any;
+  var text: any;
+  var i: number;
+  
+  // 处理参数实现重载
+  if (c !== undefined) {// c有值的话是传入了三个参数，即是处理三个参数的情况sel、data、children/text
+    if (b !== null) {// 传入了b则将b值存放到data中，模块处理时需要的数据
+      data = b;
+    }
+    if (is.array(c)) {// 如果c为数组类型，则将c的值存放到children中，表示c是子节点
+      children = c;
+    } else if (is.primitive(c)) {// 如果c是字符串或数字，则c存放到text中，即c是元素的内容
+      text = c;
+    } else if (c && c.sel) {// 如果c是vnode（判断c是否具有sel属性），则将c转换成数组，设置给children
+      children = [c];
+    }
+  } else if (b !== undefined && b !== null) {// 如果b有值，表示有两个参数
+
+    if (is.array(b)) {// 如果b是数组，则表示b是子节点，将b设置给children
+      children = b;
+    } else if (is.primitive(b)) {// 如果b是字符串或者数字，表示b是元素的内容，则将b设置给text
+      text = b;
+    } else if (b && b.sel) {// 如果b是Vnode,则将b转换为数组,设置给children
+      children = [b];
+    } else {// 如果b是对象，则将b设置给data,
+      data = b;
+    }
+  }
+  // 判断children是否有值
+  if (children !== undefined) {
+    // 有值，则遍历children,处理children中的原始值（String|Number）
+    for (i = 0; i < children.length; ++i) {
+      // 判断每一个元素是否是字符串或者数字，如果是原始类型，则创建文本节点
+      if (is.primitive(children[i]))
+        children[i] = vnode(
+          undefined,
+          undefined,
+          undefined,
+          children[i],
+          undefined
+        );
+    }
+  }
+  // 处理SVG
+  if (
+    sel[0] === "s" &&
+    sel[1] === "v" &&
+    sel[2] === "g" &&
+    (sel.length === 3 || sel[3] === "." || sel[3] === "#")
+  ) {
+    // 给svg添加命名空间
+    addNS(data, children, sel);
+  }
+  // 返回vnode
+  return vnode(sel, data, children, text, undefined);
+}
+
+```
+
+
+
+`h()`的核心是调用`vnode`函数来返回一个`vnode`节点
+
+![h函数的实现](C:\Users\25856\Downloads\h函数的实现.png)
+
+### Vnode
+
+### patch
+
+#### patch的整体执行过程
+
+### init
 
 ## 参考
 
