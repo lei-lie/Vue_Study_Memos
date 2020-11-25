@@ -531,15 +531,88 @@ export function h(sel: any, b?: any, c?: any): VNode {
 
 `h()`的核心是调用`vnode`函数来返回一个`vnode`节点
 
-![h函数的实现](C:\Users\25856\Downloads\h函数的实现.png)
+![h函数的实现](D:\00_workspace\00_mine\Vue_Study_Memos\doc\拉勾教育_3天搞定前端核心框架Vue.js源码\h函数的实现.png)
 
 ### Vnode
+
+```javascript
+// 导入VNodeData需要的模块
+import { Hooks } from './hooks'
+import { AttachData } from './helpers/attachto'
+import { VNodeStyle } from './modules/style'
+import { On } from './modules/eventlisteners'
+import { Attrs } from './modules/attributes'
+import { Classes } from './modules/class'
+import { Props } from './modules/props'
+import { Dataset } from './modules/dataset'
+import { Hero } from './modules/hero'
+
+export type Key = string | number
+
+// 定义VNode接口：约束实现这个接口对象(VNode)都拥有相同的属性
+export interface VNode {
+  sel: string | undefined // 选择器
+  data: VNodeData | undefined // 节点数据：属性、样式、事件等
+  children: Array<VNode | string> | undefined // 子节点，和text互斥(vnode和text二选一)
+  elm: Node | undefined // 记录vnode对应的真实DOM（当把Vnode转换为真实DOM后，会把真实DOM存放在elm上）
+  text: string | undefined // 节点中的内容，和vnode互斥(vnode和text二选一)
+  key: Key | undefined // 用于优化的key
+}
+// 定义VNodeData接口，VNode接口中data属性的类型数据
+export interface VNodeData {
+  props?: Props // 属性
+  attrs?: Attrs // 属性
+  class?: Classes // 类样式
+  style?: VNodeStyle // 行内样式
+  dataset?: Dataset // 自定义属性data-*
+  on?: On // 事件
+  hero?: Hero
+  attachData?: AttachData
+  hook?: Hooks // 声明周期
+  key?: Key 
+  ns?: string // for SVGs
+  fn?: () => VNode // for thunks
+  args?: any[] // for thunks
+  [key: string]: any // for any other 3rd party module
+}
+
+
+/**
+ * @description 定义Vnode
+ * @author xialei
+ * @date 25/11/2020
+ * @export
+ * @param {(string | undefined)} sel 元素
+ * @param {(any | undefined)} data 节点属性
+ * @param {(Array<VNode | string> | undefined)} children 子节点
+ * @param {(string | undefined)} text 节点内容
+ * @param {(Element | Text | undefined)} elm 真实DOM
+ * @return {Object}  {VNode} 返回虚拟节点
+ */
+export function vnode (sel: string | undefined,
+  data: any | undefined,
+  children: Array<VNode | string> | undefined,
+  text: string | undefined,
+  elm: Element | Text | undefined): VNode {
+  const key = data === undefined ? undefined : data.key
+  return { sel, data, children, text, elm, key }
+}
+
+```
+
+![vnode (1)](D:\00_workspace\00_mine\Vue_Study_Memos\doc\拉勾教育_3天搞定前端核心框架Vue.js源码\vnode (1).jpg)
 
 ### patch
 
 #### patch的整体执行过程
 
 ### init
+
+## vscode中看源码必备的快捷键
+
+查看某个函数的定义位置：`Alt+鼠标左键`，返回原位置: `Alt+←`
+
+鼠标放到目前位置按F12
 
 ## 参考
 
@@ -548,5 +621,9 @@ export function h(sel: any, b?: any, c?: any): VNode {
 [VirtualDOM Git地址](https://github.com/Matt-Esch/virtual-dom)
 
 [parcel](https://parceljs.org/)
+
+## 问题参考
+
+
 
 [Cannot resolve dependency ‘snabbdom‘ or ‘snabbdom/init‘](https://blog.csdn.net/weixin_40664145/article/details/109677074)
