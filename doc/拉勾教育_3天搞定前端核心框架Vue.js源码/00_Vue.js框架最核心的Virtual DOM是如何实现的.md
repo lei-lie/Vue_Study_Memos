@@ -1137,6 +1137,502 @@ export function init (modules: Array<Partial<Module>>, domApi?: DOMAPI) {
 
 ![createElm](D:\00_workspace\00_mine\Vue_Study_Memos\doc\拉勾教育_3天搞定前端核心框架Vue.js源码\createElm.jpg)
 
+### addVnodes & removeVnodes
+
+### patchVnode
+
+```
+// 导入Module接口，VNode，DOMAPI等
+import { Module } from './modules/module'
+import { vnode, VNode } from './vnode'
+import * as is from './is'
+import { htmlDomApi, DOMAPI } from './htmldomapi'
+
+type NonUndefined<T> = T extends undefined ? never : T
+
+/**
+ * @description 判断某个数据不存在
+ * @author xialei
+ * @date 26/11/2020
+ * @param {*} s
+ * @return {*}  {boolean}
+ */
+function isUndef (s: any): boolean {
+  return s === undefined
+}
+
+/**
+ * @description 判断某个数据是否有定义
+ * @author xialei
+ * @date 26/11/2020
+ * @template A
+ * @param {A} s
+ * @return {*}  {s is NonUndefined<A>}
+ */
+function isDef<A> (s: A): s is NonUndefined<A> {
+  return s !== undefined
+}
+
+type VNodeQueue = VNode[]
+
+const emptyNode = vnode('', {}, [], undefined, undefined)
+
+/**
+ * @description 判断两个新旧节点是否是相同节点
+ * @author xialei
+ * @date 25/11/2020
+ * @param {VNode} vnode1 旧节点
+ * @param {VNode} vnode2 新节点
+ * @return {Boolean}  {boolean}
+ */
+function sameVnode (vnode1: VNode, vnode2: VNode): boolean {
+  // 判断两个节点的key和sel是否相同
+  return vnode1.key === vnode2.key && vnode1.sel === vnode2.sel
+}
+
+/**
+ * @description 判断用户传入的节点是否是Vnode
+ * @author xialei
+ * @date 25/11/2020
+ * @param {*} vnode
+ * @return {*}  {vnode is VNode}
+ */
+function isVnode (vnode: any): vnode is VNode {
+  // 判断是否是VNode,只需要判断VNode是否存在sel属性，存在则表示是虚拟节点，反之是真实DOM
+  return vnode.sel !== undefined
+}
+
+type KeyToIndexMap = {[key: string]: number}
+
+type ArraysOf<T> = {
+  [K in keyof T]: Array<T[K]>;
+}
+
+type ModuleHooks = ArraysOf<Required<Module>>
+
+function createKeyToOldIdx (children: VNode[], beginIdx: number, endIdx: number): KeyToIndexMap {
+  const map: KeyToIndexMap = {}
+  for (let i = beginIdx; i <= endIdx; ++i) {
+    const key = children[i]?.key
+    if (key !== undefined) {
+      map[key] = i
+    }
+  }
+  return map
+}
+
+// 钩子函数
+const hooks: Array<keyof Module> = ['create', 'update', 'remove', 'destroy', 'pre', 'post']
+
+/**
+ * @description init实现
+ * @author xialei
+ * @date 25/11/2020
+ * @export
+ * @param {Array<Partial<Module>>} modules 模块 处理元素的属性，样式等
+ * @param {DOMAPI} [domApi] DOM 操作API
+ * @return {Function} patch 返回patch函数  
+ */
+export function init (modules: Array<Partial<Module>>, domApi?: DOMAPI) {
+  let i: number
+  let j: number
+  const cbs: ModuleHooks = {
+    create: [],
+    update: [],
+    remove: [],
+    destroy: [],
+    pre: [],
+    post: []
+  }
+  // 初始化转换虚拟节点的api，domApi是将虚拟DOM转换为HTML字符串或其他内容，htmlDOMApi是将真实DOM转换为虚拟DOM
+  const api: DOMAPI = domApi !== undefined ? domApi : htmlDomApi
+  // 把传入的所有模块的钩子函数，统一存放到cbs对象中
+  // 最终构建的cbs对象的形式cbs={create: [fn1,fn2],update:[fn1,fn2],...}
+  for (i = 0; i < hooks.length; ++i) {
+    // cbs.create = [],cbs.update = [],...
+    cbs[hooks[i]] = []
+    for (j = 0; j < modules.length; ++j) {
+      // modules传入的模块数组
+      // 获取模块中的hook函数
+      // hook = modules[0][create]
+      const hook = modules[j][hooks[i]]
+      if (hook !== undefined) {
+        // 把获取到的hook函数存放到cbs对应的钩子函数数组中
+        (cbs[hooks[i]] as any[]).push(hook)
+      }
+    }
+  }
+
+  /**
+   * @description 将真实DOM转换为空的VNode
+   * @author xialei
+   * @date 25/11/2020
+   * @param {Element} elm
+   * @return {Object} vnode 返回一个空的vnode  
+   */
+  function emptyNodeAt (elm: Element) {
+    // 获取真实DOM的id
+    const id = elm.id ? '#' + elm.id : ''
+    // 获取真实DOM的className,并给这些className前面加上.
+    const c = elm.className ? '.' + elm.className.split(' ').join('.') : ''
+    // 将标签的名称，id，class连接上作为vnode的第一个参数
+    return vnode(api.tagName(elm).toLowerCase() + id + c, {}, [], undefined, elm)
+  }
+
+  /**
+   * @description 创建移除函数的回调函数
+   * @author xialei
+   * @date 26/11/2020
+   * @param {Node} childElm
+   * @param {number} listeners
+   * @return {*}  
+   */
+  function createRmCb (childElm: Node, listeners: number) {
+    // 返回删除元素的回调函数
+    return function rmCb () {
+      if (--listeners === 0) {
+        const parent = api.parentNode(childElm) as Node
+        api.removeChild(parent, childElm)
+      }
+    }
+  }
+
+  /**
+   * @description 将Vnode转换成真实的DOM,并将真实DOM挂载到vnode.elm属性上,这一步并不会把DOM插入文档流中
+   * @author xialei
+   * @date 25/11/2020
+   * @param {VNode} vnode
+   * @param {VNodeQueue} insertedVnodeQueue
+   * @return {*}  {Node}
+   */
+  function createElm (vnode: VNode, insertedVnodeQueue: VNodeQueue): Node {
+    let i: any
+    let data = vnode.data
+    // 执行用户设置的init钩子函数
+    if (data !== undefined) {
+      const init = data.hook?.init
+      // 判断init函数是否有定义
+      if (isDef(init)) {
+        // 调用init
+        init(vnode)
+        // 重新给data赋值，用户传入的init可能对Vnode.data有修改
+        data = vnode.data
+      }
+    }
+    // 将Vnode转换为真实DOM对象，并将真实DOM挂载到vnode.elm
+    const children = vnode.children
+    const sel = vnode.sel
+    // 如果sel值为!,则创建注释节点
+    if (sel === '!') {
+      // 判断text是否为空
+      if (isUndef(vnode.text)) {
+        vnode.text = ''
+      }
+      vnode.elm = api.createComment(vnode.text!)
+    } else if (sel !== undefined) { // 创建DOM元素
+      // 解析选择器id,class选择器
+      const hashIdx = sel.indexOf('#')
+      const dotIdx = sel.indexOf('.', hashIdx)
+      const hash = hashIdx > 0 ? hashIdx : sel.length
+      const dot = dotIdx > 0 ? dotIdx : sel.length
+      // 解析标签名
+      const tag = hashIdx !== -1 || dotIdx !== -1 ? sel.slice(0, Math.min(hash, dot)) : sel
+      // 判断创建的元素是否是带有命名空间，有命名空间，一般为SVG
+      const elm = vnode.elm = isDef(data) && isDef(i = data.ns)
+        ? api.createElementNS(i, tag)
+        : api.createElement(tag)
+      // 设置id,class属性
+      if (hash < dot) elm.setAttribute('id', sel.slice(hash + 1, dot))
+      if (dotIdx > 0) elm.setAttribute('class', sel.slice(dot + 1).replace(/\./g, ' '))
+      // 执行模块的create钩子函数
+      for (i = 0; i < cbs.create.length; ++i) cbs.create[i](emptyNode, vnode)
+      // 如果vnode存在子节点，创建Vnode对应的DOM元素并追加到DOM树上
+      if (is.array(children)) {
+        for (i = 0; i < children.length; ++i) {
+          const ch = children[i]
+          if (ch != null) {
+            api.appendChild(elm, createElm(ch as VNode, insertedVnodeQueue))
+          }
+        }
+      } else if (is.primitive(vnode.text)) { 
+        // 如果存在text属性并且text是string或者number，则创建文本节点并添加到DOM树上
+        api.appendChild(elm, api.createTextNode(vnode.text))
+      }
+      const hook = vnode.data!.hook
+      // 执行用户传入的create钩子函数
+      if (isDef(hook)) {
+        hook.create?.(emptyNode, vnode)
+        if (hook.insert) {
+          // 把vnode添加到队列中，为后续执行insert做准备
+          insertedVnodeQueue.push(vnode)
+        }
+      }
+    } else {
+      // 选择器为空，则表示需要创建文本节点
+      vnode.elm = api.createTextNode(vnode.text!)
+    }
+    // 返回新创建的DOM
+    return vnode.elm
+  }
+
+  function addVnodes (
+    parentElm: Node,
+    before: Node | null,
+    vnodes: VNode[],
+    startIdx: number,
+    endIdx: number,
+    insertedVnodeQueue: VNodeQueue
+  ) {
+    for (; startIdx <= endIdx; ++startIdx) {
+      const ch = vnodes[startIdx]
+      if (ch != null) {
+        api.insertBefore(parentElm, createElm(ch, insertedVnodeQueue), before)
+      }
+    }
+  }
+
+  /**
+   * @description 执行destory钩子函数
+   * @author xialei
+   * @date 26/11/2020
+   * @param {VNode} vnode
+   */
+  function invokeDestroyHook (vnode: VNode) {
+    const data = vnode.data
+    if (data !== undefined) {
+      // 执行用户设置的destory钩子函数
+      data?.hook?.destroy?.(vnode)
+      for (let i = 0; i < cbs.destroy.length; ++i) cbs.destroy[i](vnode)
+      // 执行子节点中用户设置的destory钩子函数
+      if (vnode.children !== undefined) {
+        for (let j = 0; j < vnode.children.length; ++j) {
+          const child = vnode.children[j]
+          if (child != null && typeof child !== 'string') {
+            invokeDestroyHook(child)
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * @description 批量删除vnode
+    * @author xialei
+   * @date 26/11/2020
+   * @param {Node} parentElm 父元素
+   * @param {VNode[]} vnodes 需要移出的子节点
+   * @param {number} startIdx 循环开始的变量
+   * @param {number} endIdx 循环结束的变量
+   */
+  function removeVnodes (parentElm: Node,
+    vnodes: VNode[],
+    startIdx: number,
+    endIdx: number): void {
+    for (; startIdx <= endIdx; ++startIdx) {
+      let listeners: number
+      let rm: () => void
+      const ch = vnodes[startIdx]
+      if (ch != null) {
+        // 如果sel有值
+        if (isDef(ch.sel)) {
+          // 执行destory钩子函数（会执行所有子节点的destory()钩子函数）
+          invokeDestroyHook(ch)
+          // remove钩子函数的个数
+          listeners = cbs.remove.length + 1
+          // 创建删除的回调函数
+          rm = createRmCb(ch.elm!, listeners)
+          // 执行节点本身的remove钩子函数
+          for (let i = 0; i < cbs.remove.length; ++i) cbs.remove[i](ch, rm)
+          // 执行用户设置的remove钩子函数
+          const removeHook = ch?.data?.hook?.remove
+          if (isDef(removeHook)) {
+            removeHook(ch, rm)
+          } else { 
+            // 如果没有用户定义的钩子函数，直接调用删除元素的方法
+            rm() 
+          }
+        } else { // 如果是文本节点
+          // 将文本节点从父元素中移除
+          api.removeChild(parentElm, ch.elm!)
+        }
+      }
+    }
+  }
+
+  function updateChildren (parentElm: Node,
+    oldCh: VNode[],
+    newCh: VNode[],
+    insertedVnodeQueue: VNodeQueue) {
+    let oldStartIdx = 0
+    let newStartIdx = 0
+    let oldEndIdx = oldCh.length - 1
+    let oldStartVnode = oldCh[0]
+    let oldEndVnode = oldCh[oldEndIdx]
+    let newEndIdx = newCh.length - 1
+    let newStartVnode = newCh[0]
+    let newEndVnode = newCh[newEndIdx]
+    let oldKeyToIdx: KeyToIndexMap | undefined
+    let idxInOld: number
+    let elmToMove: VNode
+    let before: any
+
+    while (oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
+      if (oldStartVnode == null) {
+        oldStartVnode = oldCh[++oldStartIdx] // Vnode might have been moved left
+      } else if (oldEndVnode == null) {
+        oldEndVnode = oldCh[--oldEndIdx]
+      } else if (newStartVnode == null) {
+        newStartVnode = newCh[++newStartIdx]
+      } else if (newEndVnode == null) {
+        newEndVnode = newCh[--newEndIdx]
+      } else if (sameVnode(oldStartVnode, newStartVnode)) {
+        patchVnode(oldStartVnode, newStartVnode, insertedVnodeQueue)
+        oldStartVnode = oldCh[++oldStartIdx]
+        newStartVnode = newCh[++newStartIdx]
+      } else if (sameVnode(oldEndVnode, newEndVnode)) {
+        patchVnode(oldEndVnode, newEndVnode, insertedVnodeQueue)
+        oldEndVnode = oldCh[--oldEndIdx]
+        newEndVnode = newCh[--newEndIdx]
+      } else if (sameVnode(oldStartVnode, newEndVnode)) { // Vnode moved right
+        patchVnode(oldStartVnode, newEndVnode, insertedVnodeQueue)
+        api.insertBefore(parentElm, oldStartVnode.elm!, api.nextSibling(oldEndVnode.elm!))
+        oldStartVnode = oldCh[++oldStartIdx]
+        newEndVnode = newCh[--newEndIdx]
+      } else if (sameVnode(oldEndVnode, newStartVnode)) { // Vnode moved left
+        patchVnode(oldEndVnode, newStartVnode, insertedVnodeQueue)
+        api.insertBefore(parentElm, oldEndVnode.elm!, oldStartVnode.elm!)
+        oldEndVnode = oldCh[--oldEndIdx]
+        newStartVnode = newCh[++newStartIdx]
+      } else {
+        if (oldKeyToIdx === undefined) {
+          oldKeyToIdx = createKeyToOldIdx(oldCh, oldStartIdx, oldEndIdx)
+        }
+        idxInOld = oldKeyToIdx[newStartVnode.key as string]
+        if (isUndef(idxInOld)) { // New element
+          api.insertBefore(parentElm, createElm(newStartVnode, insertedVnodeQueue), oldStartVnode.elm!)
+        } else {
+          elmToMove = oldCh[idxInOld]
+          if (elmToMove.sel !== newStartVnode.sel) {
+            api.insertBefore(parentElm, createElm(newStartVnode, insertedVnodeQueue), oldStartVnode.elm!)
+          } else {
+            patchVnode(elmToMove, newStartVnode, insertedVnodeQueue)
+            oldCh[idxInOld] = undefined as any
+            api.insertBefore(parentElm, elmToMove.elm!, oldStartVnode.elm!)
+          }
+        }
+        newStartVnode = newCh[++newStartIdx]
+      }
+    }
+    if (oldStartIdx <= oldEndIdx || newStartIdx <= newEndIdx) {
+      if (oldStartIdx > oldEndIdx) {
+        before = newCh[newEndIdx + 1] == null ? null : newCh[newEndIdx + 1].elm
+        addVnodes(parentElm, before, newCh, newStartIdx, newEndIdx, insertedVnodeQueue)
+      } else {
+        removeVnodes(parentElm, oldCh, oldStartIdx, oldEndIdx)
+      }
+    }
+  }
+
+  /**
+   * @description 对比新旧节点，找出差异更新DOM元素
+   * @author xialei
+   * @date 26/11/2020
+   * @param {VNode} oldVnode 旧节点
+   * @param {VNode} vnode 新节点
+   * @param {VNodeQueue} insertedVnodeQueue 队列
+   */
+  function patchVnode (oldVnode: VNode, vnode: VNode, insertedVnodeQueue: VNodeQueue) {
+    const hook = vnode.data?.hook
+    // 执行用户定义的的prepatch钩子函数
+    hook?.prepatch?.(oldVnode, vnode)
+    const elm = vnode.elm = oldVnode.elm!
+    const oldCh = oldVnode.children as VNode[]
+    const ch = vnode.children as VNode[]
+    // 如果新老节点相同，则直接返回，不再往下执行
+    if (oldVnode === vnode) return
+    // 新节点的data属性存在
+    if (vnode.data !== undefined) {
+      // 执行模块的update钩子函数
+      for (let i = 0; i < cbs.update.length; ++i) cbs.update[i](oldVnode, vnode)
+      // 执行用户定义的update钩子函数
+      vnode.data.hook?.update?.(oldVnode, vnode)
+    }
+    // 如果新节点vnode的text未定义
+    if (isUndef(vnode.text)) {
+      // 新旧节点都存在children
+      if (isDef(oldCh) && isDef(ch)) {
+        // 新旧节点的子节点不相同，使用diff算法对比子节点，更新子节点
+        if (oldCh !== ch) updateChildren(elm, oldCh, ch, insertedVnodeQueue)
+      } else if (isDef(ch)) { // 如果只有新节点有children属性
+        // 如果老节点存在text属性，则清空老节点的d对应DOM的内容
+        if (isDef(oldVnode.text)) api.setTextContent(elm, '')
+        // 批量添加子节点
+        addVnodes(elm, null, ch, 0, ch.length - 1, insertedVnodeQueue)
+      } else if (isDef(oldCh)) {// 如果只有来节点有children
+        // 移除老节点的chidlren
+        removeVnodes(elm, oldCh, 0, oldCh.length - 1)
+      } else if (isDef(oldVnode.text)) { // 如果老节点存在text
+        // 清空老节点的DOM元素的内容
+        api.setTextContent(elm, '')
+      }
+    } else if (oldVnode.text !== vnode.text) { // 新旧节点text内容不相同
+      // 老节点存在children
+      if (isDef(oldCh)) {
+        // 移除老节点中的children
+        removeVnodes(elm, oldCh, 0, oldCh.length - 1)
+      }
+      // 设置DOM元素的textContent为vnode.text
+      api.setTextContent(elm, vnode.text!)
+    }
+    // 执行用户定义的postpatch钩子函数
+    hook?.postpatch?.(oldVnode, vnode)
+  }
+  // init函数内部返回patch函数，把vnode渲染成真实DOM，并返回vnode
+  // 高阶函数的好处：
+  return function patch (oldVnode: VNode | Element, vnode: VNode): VNode {
+    // 定义i,elm,parent变量
+    let i: number, elm: Node, parent: Node
+    // 保存新插入节点的队列，目的是为了触发节点上设置的钩子函数
+    const insertedVnodeQueue: VNodeQueue = []
+    // 执行模块的pre钩子函数
+    for (i = 0; i < cbs.pre.length; ++i) cbs.pre[i]()
+    // 如果oldVndoe不是Vnode，则创建VNode并设置elm，oldVNode可以是VNode，也可以是真实DOM
+    if (!isVnode(oldVnode)) {
+      // 把真实DOM转换成空的VNode
+      oldVnode = emptyNodeAt(oldVnode)
+    }
+    // 如果两个新旧节点是相同的节点(key和sel相同)
+    if (sameVnode(oldVnode, vnode)) {
+      // 找两个节点之间的差异，并更新真实DOM
+      patchVnode(oldVnode, vnode, insertedVnodeQueue)
+    } else {// 如果新旧节点不相同，把新的Vnode渲染成DOM，并且插入到文档中，并且删除老节点
+      // 获取oldVNode中的真实DOM
+      elm = oldVnode.elm!
+      // 获取父节点
+      parent = api.parentNode(elm) as Node
+      // 把Vnode转换为真实的DOM
+      createElm(vnode, insertedVnodeQueue)
+      // 如果parent存在，则把VNode对应的DOM插入文档流中
+      if (parent !== null) {
+        api.insertBefore(parent, vnode.elm!, api.nextSibling(elm))
+        // 移除老节点
+        removeVnodes(parent, [oldVnode], 0, 0)
+      }
+    }
+    // 执行用户设置的insert钩子函数
+    for (i = 0; i < insertedVnodeQueue.length; ++i) {
+      insertedVnodeQueue[i].data!.hook!.insert!(insertedVnodeQueue[i])
+    }
+    // 执行cbs的post钩子函数
+    for (i = 0; i < cbs.post.length; ++i) cbs.post[i]()
+    return vnode
+  }
+}
+
+```
+
+![image-20201126182050997](C:\Users\admin\AppData\Roaming\Typora\typora-user-images\image-20201126182050997.png)
+
 ## vscode中看源码必备的快捷键
 
 查看某个函数的定义位置：`Alt+鼠标左键`，返回原位置: `Alt+←`

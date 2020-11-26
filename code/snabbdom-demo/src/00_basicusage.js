@@ -22,7 +22,16 @@ h()只传递两个参数
 第一个参数： 标签+选择器
 第二个参数：如果是字符串的话就是标签的内容
  */
-let vnode = h('div#container.cls','hello world')
+let vnode = h('div#container.cls',{
+  hook: {
+    init(vnode) {
+      console.log('vnode :>> ', vnode);
+    },
+    create(emptyVnode,vnode) {
+     console.log('vnode.elm :>> ', vnode.elm);
+    }
+  }
+},'hello world')
 
 // 4.对比两个虚拟DOM
 /*
