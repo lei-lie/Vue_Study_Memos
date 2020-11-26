@@ -629,9 +629,25 @@ import { htmlDomApi, DOMAPI } from './htmldomapi'
 
 type NonUndefined<T> = T extends undefined ? never : T
 
+/**
+ * @description 判断某个数据不存在
+ * @author xialei
+ * @date 26/11/2020
+ * @param {*} s
+ * @return {*}  {boolean}
+ */
 function isUndef (s: any): boolean {
   return s === undefined
 }
+
+/**
+ * @description 判断某个数据是否有定义
+ * @author xialei
+ * @date 26/11/2020
+ * @template A
+ * @param {A} s
+ * @return {*}  {s is NonUndefined<A>}
+ */
 function isDef<A> (s: A): s is NonUndefined<A> {
   return s !== undefined
 }
@@ -752,7 +768,7 @@ export function init (modules: Array<Partial<Module>>, domApi?: DOMAPI) {
   }
 
   /**
-   * @description 将Vnode转换成真实的DOM
+   * @description 将Vnode转换成真实的DOM,并将真实DOM挂载到vnode.elm属性上,这一步并不会把DOM插入文档流中
    * @author xialei
    * @date 25/11/2020
    * @param {VNode} vnode
@@ -762,33 +778,45 @@ export function init (modules: Array<Partial<Module>>, domApi?: DOMAPI) {
   function createElm (vnode: VNode, insertedVnodeQueue: VNodeQueue): Node {
     let i: any
     let data = vnode.data
+    // 执行用户设置的init钩子函数
     if (data !== undefined) {
       const init = data.hook?.init
+      // 判断init函数是否有定义
       if (isDef(init)) {
+        // 调用init
         init(vnode)
+        // 重新给data赋值，用户传入的init可能对Vnode.data有修改
         data = vnode.data
       }
     }
+    // 将Vnode转换为真实DOM对象，并将真实DOM挂载到vnode.elm
     const children = vnode.children
     const sel = vnode.sel
+    // 如果sel值为!,则创建注释节点
     if (sel === '!') {
+      // 判断text是否为空
       if (isUndef(vnode.text)) {
         vnode.text = ''
       }
       vnode.elm = api.createComment(vnode.text!)
-    } else if (sel !== undefined) {
-      // Parse selector
+    } else if (sel !== undefined) { // 创建DOM元素
+      // 解析选择器id,class选择器
       const hashIdx = sel.indexOf('#')
       const dotIdx = sel.indexOf('.', hashIdx)
       const hash = hashIdx > 0 ? hashIdx : sel.length
       const dot = dotIdx > 0 ? dotIdx : sel.length
+      // 解析标签名
       const tag = hashIdx !== -1 || dotIdx !== -1 ? sel.slice(0, Math.min(hash, dot)) : sel
+      // 判断创建的元素是否是带有命名空间，有命名空间，一般为SVG
       const elm = vnode.elm = isDef(data) && isDef(i = data.ns)
         ? api.createElementNS(i, tag)
         : api.createElement(tag)
+      // 设置id,class属性
       if (hash < dot) elm.setAttribute('id', sel.slice(hash + 1, dot))
       if (dotIdx > 0) elm.setAttribute('class', sel.slice(dot + 1).replace(/\./g, ' '))
+      // 执行模块的create钩子函数
       for (i = 0; i < cbs.create.length; ++i) cbs.create[i](emptyNode, vnode)
+      // 如果vnode存在子节点，创建Vnode对应的DOM元素并追加到DOM树上
       if (is.array(children)) {
         for (i = 0; i < children.length; ++i) {
           const ch = children[i]
@@ -796,19 +824,24 @@ export function init (modules: Array<Partial<Module>>, domApi?: DOMAPI) {
             api.appendChild(elm, createElm(ch as VNode, insertedVnodeQueue))
           }
         }
-      } else if (is.primitive(vnode.text)) {
+      } else if (is.primitive(vnode.text)) { 
+        // 如果存在text属性并且text是string或者number，则创建文本节点并添加到DOM树上
         api.appendChild(elm, api.createTextNode(vnode.text))
       }
       const hook = vnode.data!.hook
+      // 执行用户传入的create钩子函数
       if (isDef(hook)) {
         hook.create?.(emptyNode, vnode)
         if (hook.insert) {
+          // 把vnode添加到队列中，为后续执行insert做准备
           insertedVnodeQueue.push(vnode)
         }
       }
     } else {
+      // 选择器为空，则表示需要创建文本节点
       vnode.elm = api.createTextNode(vnode.text!)
     }
+    // 返回新创建的DOM
     return vnode.elm
   }
 
@@ -1017,9 +1050,92 @@ export function init (modules: Array<Partial<Module>>, domApi?: DOMAPI) {
   }
 }
 
+
 ```
 
+### createElm内部工作过程
 
+```javascript
+/**
+   * @description 将Vnode转换成真实的DOM,并将真实DOM挂载到vnode.elm属性上,这一步并不会把DOM插入文档流中
+   * @author xialei
+   * @date 25/11/2020
+   * @param {VNode} vnode
+   * @param {VNodeQueue} insertedVnodeQueue
+   * @return {*}  {Node}
+   */
+  function createElm (vnode: VNode, insertedVnodeQueue: VNodeQueue): Node {
+    let i: any
+    let data = vnode.data
+    // 执行用户设置的init钩子函数
+    if (data !== undefined) {
+      const init = data.hook?.init
+      // 判断init函数是否有定义
+      if (isDef(init)) {
+        // 调用init
+        init(vnode)
+        // 重新给data赋值，用户传入的init可能对Vnode.data有修改
+        data = vnode.data
+      }
+    }
+    // 将Vnode转换为真实DOM对象，并将真实DOM挂载到vnode.elm
+    const children = vnode.children
+    const sel = vnode.sel
+    // 如果sel值为!,则创建注释节点
+    if (sel === '!') {
+      // 判断text是否为空
+      if (isUndef(vnode.text)) {
+        vnode.text = ''
+      }
+      vnode.elm = api.createComment(vnode.text!)
+    } else if (sel !== undefined) { // 创建DOM元素
+      // 解析选择器id,class选择器
+      const hashIdx = sel.indexOf('#')
+      const dotIdx = sel.indexOf('.', hashIdx)
+      const hash = hashIdx > 0 ? hashIdx : sel.length
+      const dot = dotIdx > 0 ? dotIdx : sel.length
+      // 解析标签名
+      const tag = hashIdx !== -1 || dotIdx !== -1 ? sel.slice(0, Math.min(hash, dot)) : sel
+      // 判断创建的元素是否是带有命名空间，有命名空间，一般为SVG
+      const elm = vnode.elm = isDef(data) && isDef(i = data.ns)
+        ? api.createElementNS(i, tag)
+        : api.createElement(tag)
+      // 设置id,class属性
+      if (hash < dot) elm.setAttribute('id', sel.slice(hash + 1, dot))
+      if (dotIdx > 0) elm.setAttribute('class', sel.slice(dot + 1).replace(/\./g, ' '))
+      // 执行模块的create钩子函数
+      for (i = 0; i < cbs.create.length; ++i) cbs.create[i](emptyNode, vnode)
+      // 如果vnode存在子节点，创建Vnode对应的DOM元素并追加到DOM树上
+      if (is.array(children)) {
+        for (i = 0; i < children.length; ++i) {
+          const ch = children[i]
+          if (ch != null) {
+            api.appendChild(elm, createElm(ch as VNode, insertedVnodeQueue))
+          }
+        }
+      } else if (is.primitive(vnode.text)) { 
+        // 如果存在text属性并且text是string或者number，则创建文本节点并添加到DOM树上
+        api.appendChild(elm, api.createTextNode(vnode.text))
+      }
+      const hook = vnode.data!.hook
+      // 执行用户传入的create钩子函数
+      if (isDef(hook)) {
+        hook.create?.(emptyNode, vnode)
+        if (hook.insert) {
+          // 把vnode添加到队列中，为后续执行insert做准备
+          insertedVnodeQueue.push(vnode)
+        }
+      }
+    } else {
+      // 选择器为空，则表示需要创建文本节点
+      vnode.elm = api.createTextNode(vnode.text!)
+    }
+    // 返回新创建的DOM
+    return vnode.elm
+  }
+```
+
+![createElm](D:\00_workspace\00_mine\Vue_Study_Memos\doc\拉勾教育_3天搞定前端核心框架Vue.js源码\createElm.jpg)
 
 ## vscode中看源码必备的快捷键
 

@@ -9,12 +9,7 @@ import { h } from 'snabbdom/build/package/h'; // helper function for creating vn
  * 功能： helloworld div中放置h1,p
  */
 // 1.初始化patch函数以及出入需要的模块
-let patch = init([
-  classModule, // makes it easy to toggle classes
-  propsModule, // for setting properties on DOM elements
-  styleModule, // handles styling on elements with support for animations
-  eventListenersModule, // attaches event listeners
-]);
+let patch = init([]);
 // 2.获取根节点
 let app = document.getElementById('app');
 
