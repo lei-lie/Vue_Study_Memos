@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Object.defineProperty定义多个成员</title>
+</head>
+
+<body>
+    <div id="app">
+
+    </div>
+    <script>
+        let data = {
+            title: 'hello defineProperty',
+            time: new Date().toLocaleTimeString()
+        }
+        // 模拟Vue实例
+        let vm = {}
+
+        function proxyData(data) {
+            if (data && Object.keys(data).length > 0) {
+                // 遍历所有的属性
+                Object.keys(data).forEach(key => {
+                    // 数据劫持：当访问或设置vm中成员的时候，做一些干预
+                    Object.defineProperty(vm, key, {
+                        enumerable: true, // 可枚举（可遍历）
+                        configurable: true, // 可配置（可以使用delete删除，可以通过defineProperty更新定义）,
+                        // 当获取值得时候执行
+                        get() {
+                            console.log('get :>> ', data[key]);
+                            return data[key]
+                        },
+                        // 当设置值的时候执行
+                        set(newVal) {
+                            console.log('set :>> ', newVal);
+                            if (newVal === data[key]) {
+                                return
+                            }
+                            data[key] = newVal;
+                            // 数据更新时，更新DOM数据
+                            document.querySelector('#app').textContent = data[key];
+                        },
+
+                    })
+                })
+            }
+
+        }
+        proxyData(data);
+    </script>
+</body>
+
+</html>
