@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vue响应式模拟</title>
+</head>
+
+<body>
+    <div id="app">
+        <h1>插值表达式</h1>
+        <h3>{{msg}}</h3>
+        <h3>{{count}}</h3>
+        <h1>v-text</h1>
+        <div v-text="MSD Reference"></div>
+        <h1>v-model</h1>
+        <input type="text" v-model="msg">
+        <input type="text" v-model="count">
+    </div>
+    <script src="./compiler.js"></script>
+    <script src="./observer.js"></script>
+    <script src="./miniVue.js"></script>
+    <script>
+        let vm = new Vue({
+            el: '#app',
+            data: {
+                msg: 'vue响应式模拟',
+                count: 1,
+                person: {
+                    name:'xx'
+                }
+            }
+        })
+        console.log(vm);
+        console.log(vm.msg);
+        vm.msg = {
+            text:'tips'
+        }
+        console.log(vm);
+    </script>
+</body>
+
+</html>

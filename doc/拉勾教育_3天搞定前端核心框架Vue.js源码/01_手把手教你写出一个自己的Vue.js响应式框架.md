@@ -285,6 +285,216 @@ Vue2.x中实现响应式的基本原理：
 
 ## 手写Vue.js响应式原理
 
+### Vue响应式模拟
+
+最小版本的Vue需要的属性
+
+![image-20201127165057264](C:\Users\admin\AppData\Roaming\Typora\typora-user-images\image-20201127165057264.png)
+
+##### Vue
+
+![image-20201127165658374](C:\Users\admin\AppData\Roaming\Typora\typora-user-images\image-20201127165658374.png)
+
+实现：
+
+```js
+class Vue {
+  constructor(options) {
+    // 1.通过属性保存选项的数据
+    this.$options = options || {};
+    this.$data = options.data || {};
+    this.$el = typeof options.el === 'string' ? document.querySelector(options.el) : options.el;
+    // 2.把data中的属性转换成getter/setter,注入Vue实例
+    this._proxyData(this.$data);
+    // 3.调用observer对象，监听数据的变化
+    new Observer(this.$data);
+    // 调用complier属性解析指令和插值表达式
+    new Compiler(this)
+  }
+
+  // 代理数据
+  _proxyData(data) {
+    if (data && Object.keys(data).length > 0) {
+      // 遍历data中的所有属性
+      Object.keys(data).map((key) => {
+        // 把data中的属性转换成getter/setter
+        Object.defineProperty(this, key, {
+          enumerable: true, // 可枚举（可遍历）
+          configurable: true, // 可配置（可以使用delete删除，可以通过defineProperty更新定义）,
+          get() {
+            return data[key];
+          },
+          set(newVal) {
+            if (newVal === data[key]) {
+              return;
+            }
+            data[key] = newVal;
+          },
+        });
+      });
+      // 把data中的属性注入vue实例
+    }
+  }
+}
+
+```
+
+##### Observer
+
+![image-20201127173623579](C:\Users\admin\AppData\Roaming\Typora\typora-user-images\image-20201127173623579.png)
+
+实现：
+
+```js
+class Observer {
+  constructor(data) {
+    this.walk(data);
+  }
+  // 遍历对象的所有属性
+  walk(data) {
+    // 1.判断data是否是对象
+    if (!data && !Object.prototype.toString.call(data) === '[object Object]') {
+      return;
+    }
+    if (Object.keys(data).length > 0) {
+      // 2.遍历data对象的所有属性
+      Object.keys(data).map((key) => {
+        this.defineReactivity(data, key, data[key]);
+      });
+    }
+  }
+  // 将属性转换成响应式数据:getter/setter
+  defineReactivity(data, key, val) {
+    let that = this;
+    if (Object.prototype.toString.call(val) === '[object Object]') {
+      // 如果val是对象，遍历val对象中的所有属性转换为响应式数据
+      this.walk(val);
+    }
+    Object.defineProperty(data, key, {
+      enumerable: true,
+      configurable: true,
+      get() {
+        //return data[key] 不能在`defineReactivity`的`get`中通过`data[key]`的方式返回数据，原因是`data[key]`会一直调用`get`方法，形成死递归，导致栈溢出
+        return val;
+      },
+      set(newVal) {
+        if (newVal === val) {
+          return;
+        }
+        // 如果newVal是对象，遍历newVal对象中的所有属性转换为响应式数据
+        if (Object.prototype.toString.call(newVal) === '[object Object]') {
+          that.walk(newVal);
+        }
+        val = newVal;
+        // 发送通知
+      },
+    });
+  }
+}
+
+```
+
+
+
+注意：
+
+不能在`defineReactivity`的`get`中通过`data[key]`的方式返回数据，原因是`data[key]`会一直调用`get`方法，形成死递归，导致栈溢出
+
+![image-20201127173513749](C:\Users\admin\AppData\Roaming\Typora\typora-user-images\image-20201127173513749.png)
+
+##### Compiler
+
+![image-20201127175536714](C:\Users\admin\AppData\Roaming\Typora\typora-user-images\image-20201127175536714.png)
+
+实现：
+
+```js
+class Compiler {
+  constructor(vm) {
+    // 缓存el,vm
+    this.el = vm.$el;
+    this.vm = vm;
+    // 
+    this.compile(this.el)
+  }
+  // 编译模板，处理元素节点和文本节点
+  compile(el) {
+      // 变量el中 所有节点
+      let childNodes = el.childNodes
+      Array.from(childNodes).map(node => {
+          // 判断node节点是否存在子节点，存在则递归调用compiler
+          if(node.childNodes && node.childNodes.length > 0) {
+              this.compile(node)
+          }
+          // 判断是否是文本节点
+          if (this.isTextNode(node)) {
+              // 编译文本节点
+              this.compileText(node)
+          }
+          // 判断是否是元素节点
+          if (this.isElementNode(node)) {
+              // 编译元素节点
+              this.compileElement(node)
+          }
+      })
+  }
+  // 编译元素节点，处理指令
+  compileElement(node) {
+    let attrs = node.attributes
+    console.log(attrs);
+    // 遍历所有属性节点
+    Array.from(attrs).map(attr => {
+        let attrName = attr.name
+        // 判断是否是指令
+        if (this.isDirective(attrName)) {
+            // v-text --> text
+            attrName = attrName.substr(2)
+            let key = attr.value
+            this.update(node,key,attrName)
+        }
+    })
+  }
+  // 处理v-text和v-model指令
+  update(node,key,attrName) {
+      // 指令对应的方法
+      let updateFn = this[attrName+'Updater']
+      updateFn && updateFn(node,this.vm[key])
+  }
+  // 处理v-text,获取对应的值赋给DOM元素
+  textUpdater(node,val) {
+      node.textContent = val
+  }
+  // 处理v-model
+  modelUpdater(node,val) {
+      node.value = val
+  }
+  // 编译文本节点，处理插值表达式,替换为真实数据
+  compileText(node) {
+      console.dir(node);
+      // {{ msg }}
+      let reg = /\{\{(.+?)\}\}/
+      let text = node.textContent
+      if (reg.test(text)) {
+        let key = RegExp.$1.trim()
+        node.textContent = text.replace(reg,this.vm[key])
+      }
+  }
+  // 判断元素属性的名称是否是指令
+  isDirective(attrName) {
+    return attrName.startsWidth('v-');
+  }
+  // 判断节点是否是文本节点
+  isTextNode(node) {
+    return node.nodeType === 3;
+  }
+  // 判断节点是否是元素节点
+  isElementNode(node) {
+    return node.nodeType === 1;
+  }
+}
+
+```
+
 
 
 ## 参考
