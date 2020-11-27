@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>发布订阅模式</title>
+    </head>
+
+    <body>
+        <div id="app">
+        </div>
+        <script>
+        class EventBus {
+            constructor() {
+                // null 不需要原型 {'click': [fn1,fn2]}
+                this.subs = Object.create(null);
+            }
+            // 注册事件
+            $on(eventType, fn) {
+                //   if (!this.subs[eventType]) {
+                //       this.subs[eventType] = [fn]
+                //   } else  {
+                //       this.subs[eventType].push(fn)
+                //   }
+                this.subs[eventType] = this.subs[eventType] || [];
+                this.subs[eventType].push(fn);
+            }
+            // 触发事件
+            $emit(eventType, args) {
+                if (this.subs[eventType]) {
+                    this.subs[eventType].map(handler => handler(args))
+                }
+            }
+        }
+        let bus = new EventBus()
+        bus.$on('click-event', (param) => {
+            console.log('click-event >> ', param);
+        })
+        bus.$on('change-event', (param) => {
+            console.log('change-event >> ', param);
+        })
+
+        bus.$emit('click-event', 'clicked')
+        bus.$emit('change-event', 'changed')
+    </script>
+    </body>
+
+</html>

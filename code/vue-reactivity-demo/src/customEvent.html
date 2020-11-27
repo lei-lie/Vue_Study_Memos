@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vue中自定义事件的使用</title>
+</head>
+<body>
+    <div id="app">
+       
+    </div>
+    <script src="./assets/vue/vue.js"></script>
+    <script>
+        let vm = new Vue({
+            data() {
+                return {}
+            },
+            methods: {
+              
+            }
+        })
+        // 注册事件(订阅消息)
+        vm.$on('data-change',()=> {
+            console.log('data-change ');
+        })
+        vm.$on('data-change',() => {
+            console.log('data-change-1');
+        })
+        // 触发事件（发布消息）
+        vm.$emit('data-change')
+    </script>
+</body>
+</html>

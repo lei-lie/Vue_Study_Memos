@@ -47,7 +47,9 @@
 
 
 
-### Vue2.x 数据响应式核心原理
+### Vue2.x 数据响应式核心原理 
+
+`Vue2.x` 数据响应式核心原理: 通过`Object.defineProperty`做数据劫持
 
 [深入响应式原理](https://cn.vuejs.org/v2/guide/reactivity.html)
 
@@ -55,7 +57,7 @@
 
 使用`Object.defineProperty`修改数据
 
-```javascript
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -114,9 +116,179 @@ Vue2.x中实现响应式的基本原理：
 
 ### Vue3.x数据响应式核心原理
 
+[MDN Proxy](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Global_Objects/Proxy)
+
+[Vue3.0](https://v3.vuejs.org/guide/introduction.html)数据响应式核心原理: `Vue3.0`中通过使用`ES6`中的`Proxy`来实现数据劫持
+
+`Proxy`:是直接监听对象，而非属性
+
+## 发布订阅模式&观察者模式
+
+### 发布-订阅模式（Publish-Subscribe Pattern, pub-sub）
+
+三要素： 订阅者、发布者，事件中心
+
+> **发布 - 订阅模式** （Publish-Subscribe Pattern, pub-sub）又叫观察者模式（Observer Pattern），它定义了一种一对多的关系，让多个订阅者对象同时监听某一个发布者，或者叫主题对象，这个主题对象的状态发生变化时就会通知所有订阅自己的订阅者对象，使得它们能够自动更新自己。
+
+现实生活中的例子：
+
+小白（订阅者）想要买一本考试参考书，于是去了某书店，书店的老板（发布者）告诉小明，参考书暂时缺货，如果小明想要的话，可以留下联系方式，等参考书补货后会通知小明，于是小明留下了自己的联系方式，几天后，小明接到书店老板的电话说参考书到了，可以到店购买了（订阅的消息），这就是一个发布-订阅的过程
 
 
-## 发布订阅模式
+
+[Vue中的自定义事件](https://cn.vuejs.org/v2/guide/components-custom-events.html)以及[Node.js](https://nodejs.org/dist/latest-v14.x/docs/api/events.html)中的事件机制都采用了发布-订阅模式
+
+#### 模拟Vue中自定义事件的实现
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Vue中自定义事件的使用</title>
+    </head>
+
+    <body>
+        <div id="app">
+        </div>
+        <script>
+        class EventBus {
+            constructor() {
+                // null 不需要原型 {'click': [fn1,fn2]}
+                this.subs = Object.create(null);
+            }
+            // 注册事件
+            $on(eventType, fn) {
+                //   if (!this.subs[eventType]) {
+                //       this.subs[eventType] = [fn]
+                //   } else  {
+                //       this.subs[eventType].push(fn)
+                //   }
+                this.subs[eventType] = this.subs[eventType] || [];
+                this.subs[eventType].push(fn);
+            }
+            // 触发事件
+            $emit(eventType, args) {
+                if (this.subs[eventType]) {
+                    this.subs[eventType].map(handler => handler(args))
+                }
+            }
+        }
+        let bus = new EventBus()
+        bus.$on('click-event', (param) => {
+            console.log('click-event >> ', param);
+        })
+        bus.$on('change-event', (param) => {
+            console.log('change-event >> ', param);
+        })
+
+        bus.$emit('click-event', 'clicked')
+        bus.$emit('change-event', 'changed')
+    </script>
+    </body>
+
+</html>
+```
+
+
+
+### 观察者模式（Observer Pattern ,Watcher）
+
+观察者(订阅者)--`Watcher`
+
+`update`: 每个观察者都有一个update方法，当事件发生时，具体要做的事情
+
+目标（发布者）--`Dep`
+
+`subs`数组：存储所有的观察者
+
+`addSubs`: 添加观察者
+
+`notify()`: 当事件发生，调用所有观察者的`update`()方法
+
+##### 实现简单的观察者模式
+
+
+
+观察者模式和发布-订阅模式的区别：
+
+观察者模式没有事件中心，只有发布者和订阅者，并且发布者需要知道订阅者的存在
+
+
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>观察查者模式</title>
+</head>
+
+<body>
+    <div id="app">
+    </div>
+    <script>
+        //发布者-目标 dependence
+        class Dep {
+            constructor() {
+                // 存储所有的观察者
+                this.subs = []
+            }
+            // 添加观察者
+            addSub(sub) {
+                if (sub && sub.update) {
+                    this.subs.push(sub)
+                }
+            }
+            // 通知所有的观察者
+            notify() {
+                this.subs.map(sub => sub.update())
+            }
+        }
+        // 订阅者--观察者
+        class Watcher {
+            constructor() {}
+            // 更新视图
+            update() {
+                console.log('update');
+            }
+        }
+        let dep  = new Dep()
+        let watcher = new Watcher()
+        dep.addSub(watcher)
+        dep.notify()
+    </script>
+</body>
+
+</html>
+```
+
+
+
+### 总结
+
+观察者模式：
+
+是由具体的目标，例如当事件触发，发布者就会去调用观察者的方法，所以观察者模式的订阅者和发布者之间存在依赖关系
+
+发布订阅模式：
+
+由统一的调度中心（中间桥梁）调用，因此发布者和订阅者不需要知道对方的存在
+
+![发布-订阅模式 vs 观察者模式](D:\00_workspace\00_mine\Vue_Study_Memos\doc\拉勾教育_3天搞定前端核心框架Vue.js源码\发布-订阅模式 vs 观察者模式.png)
+
+
 
 ## 手写Vue.js响应式原理
 
+
+
+## 参考
+
+[Javascript中理解发布--订阅模式](https://www.cnblogs.com/itgezhu/p/10947405.html)
+
+[javascript设计模式精讲]|(https://www.imooc.com/read/38/article/493)
