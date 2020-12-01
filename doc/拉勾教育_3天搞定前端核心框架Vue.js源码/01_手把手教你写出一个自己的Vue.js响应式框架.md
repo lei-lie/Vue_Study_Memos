@@ -287,7 +287,7 @@ Vue2.x中实现响应式的基本原理：
 
 ### Vue响应式模拟
 
-最小版本的Vue需要的属性
+最小版本的`Vue`需要的功能
 
 ![image-20201127165057264](C:\Users\admin\AppData\Roaming\Typora\typora-user-images\image-20201127165057264.png)
 
@@ -495,7 +495,78 @@ class Compiler {
 
 ```
 
+##### Dep
 
+![image-20201130102319374](C:\Users\admin\AppData\Roaming\Typora\typora-user-images\image-20201130102319374.png)
+
+```js
+class Dep {
+    constructor() {
+        // 存储所有观察者
+        this.subs = []
+    }
+    // 添加watcher
+    addSub(sub) {
+        // 判断是否是watcher
+        if (sub && sub.update) {
+            this.subs.push(sub)
+        }
+    }
+    // 发布通知
+    notify () {
+        // 遍历所有的watcher，调用自身的update操作
+        if (this.subs.length > 0) {
+            this.subs.map(sub => {
+                sub.update()
+            })
+        }
+    }
+}
+
+
+```
+
+
+
+##### Watcher
+
+![image-20201130102308410](C:\Users\admin\AppData\Roaming\Typora\typora-user-images\image-20201130102308410.png)
+
+
+
+```js
+class Watcher {
+    constructor(vm, key, cb) {
+        this.vm = vm
+        // data中的属性名称
+        this.key = key
+        // 回调函数负责更新视图
+        this.cb = cb
+        // 将当前的Watcher记录到Dep的静态属性target
+        Dep.target = this
+        // 触发get方法，在get方法中调用addSub
+        this.oldValue = vm[key]
+        // 防止重复添加
+        Dep.target = null
+    }
+
+    // 当数据发生变化时更新视图
+    update() {
+        debugger
+        let newValue = this.vm[this.key]
+        if (newValue === this.oldValue) {
+            return
+        }
+        this.cb(newValue)
+    }
+}
+```
+
+
+
+##### 双向绑定
+
+数据发生改变更新视图，视图发生变化更新数据
 
 ## 参考
 

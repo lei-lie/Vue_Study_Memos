@@ -18,6 +18,8 @@
         <input type="text" v-model="msg">
         <input type="text" v-model="count">
     </div>
+    <script src="./dep.js"></script>
+    <script src="./watcher.js"></script>
     <script src="./compiler.js"></script>
     <script src="./observer.js"></script>
     <script src="./miniVue.js"></script>
@@ -34,10 +36,10 @@
         })
         console.log(vm);
         console.log(vm.msg);
-        vm.msg = {
-            text:'tips'
-        }
-        console.log(vm);
+        // vm.msg = {
+        //     text:'tips'
+        // }
+        //console.log(vm);
     </script>
 </body>
 

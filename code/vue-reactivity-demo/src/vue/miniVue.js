@@ -3,6 +3,7 @@ class Vue {
     // 1.通过属性保存选项的数据
     this.$options = options || {};
     this.$data = options.data || {};
+    // 如果传递的是选择器，那么通过选择器获取对应的DOM
     this.$el = typeof options.el === 'string' ? document.querySelector(options.el) : options.el;
     // 2.把data中的属性转换成getter/setter,注入Vue实例
     this._proxyData(this.$data);

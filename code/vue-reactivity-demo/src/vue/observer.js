@@ -18,6 +18,8 @@ class Observer {
   // 将属性转换成响应式数据:getter/setter
   defineReactivity(data, key, val) {
     let that = this;
+    // 收集依赖并发送通知
+    let dep = new Dep()
     if (Object.prototype.toString.call(val) === '[object Object]') {
       // 如果val是对象，遍历val对象中的所有属性转换为响应式数据
       this.walk(val);
@@ -26,6 +28,10 @@ class Observer {
       enumerable: true,
       configurable: true,
       get() {
+        // 收集依赖:是否存在target(观察者)
+        if (Dep.target) {
+          dep.addSub(dep.target)
+        }
         //return data[key] 不能在`defineReactivity`的`get`中通过`data[key]`的方式返回数据，原因是`data[key]`会一直调用`get`方法，形成死递归，导致栈溢出
         return val;
       },
@@ -39,6 +45,7 @@ class Observer {
         }
         val = newVal;
         // 发送通知
+        dep.notify()
       },
     });
   }
