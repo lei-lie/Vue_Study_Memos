@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vue2.x组件学习</title>
+</head>
+
+<body>
+    <div id="app">
+        <headercmp></headercmp>
+        <h1>组件学习</h1>
+        <hr/>
+        <h2>全局组件</h2>
+        <div>{{count}}</div>
+        <operator-cmp :btns="btns" v-on:btn-click="btnClickFn"></operator-cmp>
+        <h3>全局组件的复用</h3>
+        <operator-cmp :btns="btns1" v-on:btn-click="btnClickFn"></operator-cmp>
+        <hr/>
+        <h2>局部组件</h2>
+        <cmp1 :list="list"></cmp1>
+        <h3>局部组件复用</h3>
+        <cmp1 :list="list1"></cmp1>
+        <h3>在自定义组件中使用v-model</h3>
+        <input-cmp v-model="inputVal" @input="inputHandler"></input-cmp>
+        <h3>自定义组件中使用插槽</h3>
+        <slot-cmp>
+            <p>哈哈哈，这是插槽内容</p>
+            <template v-slot:name1>
+                <p>具名插槽</p>
+            </template>
+        </slot-cmp>
+    </div>
+
+    <script src="./js/vue.js"></script>
+    <!-- 引入样式 -->
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+    <!-- 引入组件库 -->
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    <script src="./js/globalCmp.js"></script>
+    <script src="./js/cmp1.js"></script>
+    <script src="./js/index.js"></script>
+
+</body>
+
+</html>

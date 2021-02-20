@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>组件的通信方式</title>
+</head>
+
+<body>
+    <div id="app">
+        <h1>组件通信方式</h1>
+
+        <hr>
+        <h2>事件总线</h2>
+        <cmp2></cmp2>
+        <div style="border-bottom: 1px dashed #000;margin: 10px 0;"></div>
+        <cmp3></cmp3>
+        <div style="border-bottom: 1px dashed #000;margin: 10px 0;"></div>
+        <h3>$parent & $root</h3>
+        <cmp4></cmp4>
+        <cmp5></cmp5>
+        <div style="border-bottom: 1px dashed #000;margin: 10px 0;"></div>
+        <h3>$children</h3>
+        <cmp6 hello="yo generation"></cmp6>
+    </div>
+    <script src="./js/bus.js"></script>
+    <script src="./js/vue.js"></script>
+    <script src="./js/cmp2.js"></script>
+    <script src="./js/cmp3.js"></script>
+    <script src="./js/cmp4.js"></script>
+    <script src="./js/cmp5.js"></script>
+    <script src="./js/cmp6.js"></script>
+    <script src="./js/index2.js"></script>
+</body>
+
+</html>
